@@ -1,0 +1,443 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String
+  name          String
+  phone         String?
+  role          String    @default("CUSTOMER") // CUSTOMER | STORE_ADMIN | SUPER_ADMIN
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  storeMemberships    StoreMembership[]
+  shoppingSessions    ShoppingSession[]
+  carts               Cart[]
+  purchases           Purchase[]
+  behaviourEvents     BehaviourEvent[]
+  recommendations     Recommendation[]
+  recommendationEvents RecommendationEvent[]
+  preference          CustomerPreference?
+  consent             Consent?
+  auditLogs           AuditLog[]
+  exitVerifications   ExitVerification[]
+
+  @@index([email])
+}
+
+model VerificationToken {
+  id         String   @id @default(uuid())
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([identifier])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model Store {
+  id             String   @id @default(uuid())
+  name           String
+  code           String   @unique
+  address        String
+  city           String
+  state          String   @default("Maharashtra")
+  country        String   @default("India")
+  timezone       String   @default("Asia/Kolkata")
+  currency       String   @default("INR")
+  status         String   @default("ACTIVE") // ACTIVE | INACTIVE | MAINTENANCE
+  isMarketActive Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  memberships       StoreMembership[]
+  inventories       Inventory[]
+  productPrices     ProductPrice[]
+  shoppingSessions  ShoppingSession[]
+  carts             Cart[]
+  purchases         Purchase[]
+  exitVerifications ExitVerification[]
+  recommendations   Recommendation[]
+
+  @@index([code])
+  @@index([status])
+}
+
+model StoreMembership {
+  id        String   @id @default(uuid())
+  userId    String
+  storeId   String
+  role      String   @default("STORE_ADMIN")
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+}
+
+model ProductCategory {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  products    Product[]
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  sku             String   @unique
+  name            String
+  brand           String
+  description     String
+  categoryId      String
+  unit            String   @default("pack") // g, ml, kg, L, pack, piece
+  status          String   @default("ACTIVE") // ACTIVE | INACTIVE | DISCONTINUED
+  isAgeRestricted Boolean  @default(false)
+  imageUrl        String?
+  isSoftDeleted   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  category        ProductCategory  @relation(fields: [categoryId], references: [id])
+  barcodes        ProductBarcode[]
+  nutrition       ProductNutrition?
+  prices          ProductPrice[]
+  inventories     Inventory[]
+  cartItems       CartItem[]
+  purchaseItems   PurchaseItem[]
+  recommendations Recommendation[]
+  scanEvents      ScanEvent[]
+
+  @@index([sku])
+  @@index([categoryId])
+  @@index([status])
+}
+
+model ProductBarcode {
+  id        String   @id @default(uuid())
+  productId String
+  barcode   String   @unique
+  isPrimary Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([barcode])
+}
+
+model ProductNutrition {
+  id           String   @id @default(uuid())
+  productId    String   @unique
+  calories     Float?   @default(0)
+  protein      Float?   @default(0)
+  carbohydrates Float?  @default(0)
+  totalSugar   Float?   @default(0)
+  addedSugar   Float?   @default(0)
+  fat          Float?   @default(0)
+  saturatedFat Float?   @default(0)
+  fibre        Float?   @default(0)
+  sodium       Float?   @default(0) // in mg
+  servingSize  Float?   @default(100)
+  servingUnit  String?  @default("g") // g | ml | serving
+  allergens    String   @default("")
+  organic      Boolean  @default(false)
+  vegan        Boolean  @default(false)
+  glutenFree   Boolean  @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductPrice {
+  id            String    @id @default(uuid())
+  productId     String
+  storeId       String
+  currency      String    @default("INR")
+  listPrice     Float
+  salePrice     Float
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([productId, storeId])
+}
+
+model Inventory {
+  id          String   @id @default(uuid())
+  productId   String
+  storeId     String
+  quantity    Int      @default(0)
+  reservedQty Int      @default(0)
+  aisle       String   @default("A1")
+  shelf       String   @default("S1")
+  updatedAt   DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, storeId])
+}
+
+model ShoppingSession {
+  id        String    @id @default(uuid())
+  userId    String
+  storeId   String
+  status    String    @default("ACTIVE") // ACTIVE | CHECKOUT_PENDING | COMPLETED | ABANDONED
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store      Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  cart       Cart?
+  purchase   Purchase?
+  scanEvents ScanEvent[]
+
+  @@index([userId, status])
+}
+
+model Cart {
+  id                String   @id @default(uuid())
+  shoppingSessionId String   @unique
+  userId            String
+  storeId           String
+  totalAmount       Float    @default(0)
+  totalTax          Float    @default(0)
+  status            String   @default("ACTIVE") // ACTIVE | CHECKOUT_PENDING | COMPLETED | ABANDONED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  session ShoppingSession @relation(fields: [shoppingSessionId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store   Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items   CartItem[]
+
+  @@index([userId])
+}
+
+model CartItem {
+  id             String   @id @default(uuid())
+  cartId         String
+  productId      String
+  quantity       Int      @default(1)
+  unitPrice      Float
+  discountAmount Float    @default(0)
+  lineTotal      Float
+  addedAt        DateTime @default(now())
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([cartId, productId])
+}
+
+model ScanEvent {
+  id                String   @id @default(uuid())
+  shoppingSessionId String
+  barcode           String
+  productId         String?
+  scanResult        String   @default("SUCCESS")
+  timestamp         DateTime @default(now())
+
+  session ShoppingSession @relation(fields: [shoppingSessionId], references: [id], onDelete: Cascade)
+  product Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+}
+
+model BehaviourEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  eventType String
+  metadata  String   @default("{}")
+  timestamp DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventType])
+}
+
+model Purchase {
+  id                String   @id @default(uuid())
+  shoppingSessionId String   @unique
+  cartId            String
+  userId            String
+  storeId           String
+  orderNumber       String   @unique
+  subtotal          Float
+  taxTotal          Float
+  discountTotal     Float    @default(0)
+  grandTotal        Float
+  paymentStatus     String   @default("PENDING") // PENDING | AUTHORIZED | SUCCESS | FAILED | REFUNDED
+  orderStatus       String   @default("PENDING") // PENDING | PAID | VERIFIED_EXIT | CANCELLED
+  createdAt         DateTime @default(now())
+
+  session          ShoppingSession   @relation(fields: [shoppingSessionId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  items            PurchaseItem[]
+  payment          Payment?
+  receipt          Receipt?
+  exitVerification ExitVerification?
+
+  @@index([userId])
+  @@index([orderNumber])
+}
+
+model PurchaseItem {
+  id             String @id @default(uuid())
+  purchaseId     String
+  productId      String
+  sku            String
+  name           String
+  unitPrice      Float
+  quantity       Int
+  discountAmount Float  @default(0)
+  taxAmount      Float  @default(0)
+  lineTotal      Float
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id             String    @id @default(uuid())
+  purchaseId     String    @unique
+  amount         Float
+  currency       String    @default("INR")
+  provider       String    @default("CARTZEN_PAY")
+  method         String    @default("UPI") // UPI | CARD
+  transactionRef String    @unique
+  signature      String
+  status         String    @default("PENDING") // CREATED | PENDING | SUCCESS | FAILED | CANCELLED | REFUNDED
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+}
+
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique
+  provider    String
+  eventType   String
+  payload     String
+  status      String   @default("PROCESSED") // PROCESSED | FAILED
+  processedAt DateTime @default(now())
+
+  @@index([eventId])
+}
+
+model Receipt {
+  id            String   @id @default(uuid())
+  purchaseId    String   @unique
+  receiptNumber String   @unique
+  eBillUrl      String
+  receiptJson   String
+  qrCodeData    String
+  generatedAt   DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+}
+
+model ExitVerification {
+  id               String    @id @default(uuid())
+  purchaseId       String    @unique
+  storeId          String
+  verificationCode String    @unique
+  verifiedByUserId String?
+  status           String    @default("PENDING") // PENDING | VERIFIED | EXPIRED | FLAGGED
+  verifiedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  purchase       Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  verifiedByUser User?    @relation(fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+}
+
+model Recommendation {
+  id         String    @id @default(uuid())
+  userId     String
+  storeId    String
+  productId  String
+  score      Float
+  reason     String
+  validUntil DateTime?
+  createdAt  DateTime  @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  events RecommendationEvent[]
+
+  @@index([userId, productId])
+}
+
+model RecommendationEvent {
+  id               String   @id @default(uuid())
+  recommendationId String
+  userId           String
+  action           String
+  timestamp        DateTime @default(now())
+
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CustomerPreference {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  preferredCategories String   @default("[]")
+  dietaryFlags        String   @default("[]")
+  maxBudgetAlert      Float?
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Consent {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  personalizationOptIn     Boolean  @default(true)
+  behaviouralTrackingOptIn Boolean  @default(true)
+  marketingOptIn           Boolean  @default(false)
+  updatedToAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  payload    String   @default("{}")
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, action])
+}

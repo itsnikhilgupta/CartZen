@@ -1,0 +1,41 @@
+name: CartZen CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Check TypeScript Types
+        run: npm run typecheck
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Unit & Integration Tests
+        run: npm run test:unit
+
+      - name: Build Next.js Application
+        run: npm run build
+        env:
+          NEXTAUTH_SECRET: "ci_test_secret_32_bytes_minimum_length_key"
+          CARTZEN_HMAC_SECRET: "ci_hmac_secret"

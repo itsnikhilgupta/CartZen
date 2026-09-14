@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://cartzen:cartzen_pass@postgres:5432/cartzen_db?schema=public
+      - NEXTAUTH_SECRET=cartzen_docker_super_secret_key_prod_32chars
+      - NEXTAUTH_URL=http://localhost:3000
+      - NODE_ENV=production
+      - CARTZEN_HMAC_SECRET=cartzen_docker_hmac_secret_prod
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: cartzen
+      POSTGRES_PASSWORD: cartzen_pass
+      POSTGRES_DB: cartzen_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
