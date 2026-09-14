@@ -32,6 +32,7 @@ jobs:
         run: |
           npx prisma generate
           npx prisma db push --skip-generate
+          npx tsx prisma/seed.ts
 
       - name: Check TypeScript Types
         run: npm run typecheck

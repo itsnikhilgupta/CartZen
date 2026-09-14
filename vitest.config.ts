@@ -8,9 +8,10 @@ export default defineConfig({
     include: ["tests/unit/**/*.test.ts"],
     fileParallelism: false,
     maxConcurrency: 1,
+    pool: "forks",
     poolOptions: {
-      threads: {
-        singleThread: true,
+      forks: {
+        singleFork: true,
       },
     },
   },
