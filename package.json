@@ -11,7 +11,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "test:unit": "vitest run",
+    "test:unit": "vitest run && tsx prisma/seed.ts",
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test"
   },
